@@ -11,16 +11,16 @@ tz = timezone(timedelta(hours=3))
 
 
 class Olymp: # класс, в котором хранится всё-всё-всё
-    def __init__(self, bot, database='/home/pburub/mysite/olymp.db'): # запуск класса, сюда передаётся бот и база данных
+    def __init__(self, bot, database='olymp.db'): # запуск класса, сюда передаётся бот и база данных
         self.bot = bot
         started_before = False
         con = sqlite3.connect(database) # связь с базой данных
         cur = con.cursor()
 
-        if os.path.exists('/home/pburub/mysite/tutors.json'): # проверяем, есть ли уже файл, регистрирующий состояния проверяющих
+        if os.path.exists('tutors.json'): # проверяем, есть ли уже файл, регистрирующий состояния проверяющих
             # если да, то берём информацию о проверяющих из него и понимаем, что это не первый запуск олимпиады (то есть, бот до этого упал)
             started_before = True
-            with open('/home/pburub/mysite/tutors.json', 'r', encoding='utf-8') as f:
+            with open('tutors.json', 'r', encoding='utf-8') as f:
                 content = json.load(f)
             self.tutors = {}
             for key_t, val_t in content.items():
@@ -38,10 +38,10 @@ class Olymp: # класс, в котором хранится всё-всё-вс
                 self.tutors[list(tutor)[3]] = {'name': tutor[0], 'link': tutor[2], 'numbers': problems, 'isready': False,
                                                'last': {'id': None, 'number': None}}
 
-        if os.path.exists('/home/pburub/mysite/res.json'): # проверяем, есть ли уже файл, регистрирующий результаты
+        if os.path.exists('res.json'): # проверяем, есть ли уже файл, регистрирующий результаты
             # если да, то берём информацию об учатсниках из него и понимаем, что это не первый запуск олимпиады (то есть, бот до этого упал)
             started_before = True
-            with open('/home/pburub/mysite/res.json', 'r', encoding='utf-8') as f:
+            with open('res.json', 'r', encoding='utf-8') as f:
                 content = json.load(f)
             self.participants = {}
             for key_p, val_p in content.items():
@@ -65,10 +65,10 @@ class Olymp: # класс, в котором хранится всё-всё-вс
                     self.participants[participant[2]] = {'name': participant[0], 'grade': int(participant[1]),
                                                      'marks': dict((i, 0) for i in grade_task['high'].keys()), 'isready': True}
 
-        if os.path.exists('/home/pburub/mysite/waiting_list.json'): # проверяем, есть ли уже файл, регистрирующий состояние списка ожидания
+        if os.path.exists('waiting_list.json'): # проверяем, есть ли уже файл, регистрирующий состояние списка ожидания
             # если да, то берём информацию о списке ожидания из него и понимаем, что это не первый запуск олимпиады (то есть, бот до этого упал)
             started_before = True
-            with open('/home/pburub/mysite/waiting_list.json', 'r', encoding='utf-8') as f:
+            with open('waiting_list.json', 'r', encoding='utf-8') as f:
                 self.waiting_list = json.load(f)
         else: # иначе -- создаём пустой список ожидания
             self.waiting_list = []
@@ -172,11 +172,11 @@ class Olymp: # класс, в котором хранится всё-всё-вс
             self.bot.register_next_step_handler(message, self.evaluate)
 
     def save_part(self):
-        with open('/home/pburub/mysite/res.json', 'w', encoding='utf-8') as f: # обновляем информацию в файле с результатами
+        with open('res.json', 'w', encoding='utf-8') as f: # обновляем информацию в файле с результатами
             json.dump(self.participants, f, ensure_ascii=False, indent='\t')
 
     def save_tutors(self):
-        with open('/home/pburub/mysite/tutors.json', 'w', encoding='utf-8') as f: # обновляем информацию в файле с проверяющими
+        with open('tutors.json', 'w', encoding='utf-8') as f: # обновляем информацию в файле с проверяющими
             json.dump(self.tutors, f, ensure_ascii=False, indent='\t')
 
     def find(self, number, id_part): # функция поиска подходящего проверяющего
@@ -210,7 +210,7 @@ class Olymp: # класс, в котором хранится всё-всё-вс
             if is_found: # если нашёлся, то удаляем из списка ожидания и обновляем информацию в файле со списком ожидания
                 self.waiting_list.pop(i)
                 queue -= 1
-                with open('/home/pburub/mysite/waiting_list.json', 'w', encoding='utf-8') as f:
+                with open('waiting_list.json', 'w', encoding='utf-8') as f:
                     json.dump(self.waiting_list, f, ensure_ascii=False, indent='\t')
             else: # иначе -- переходим к следующему ожидающему
                 i += 1
@@ -227,7 +227,7 @@ class Olymp: # класс, в котором хранится всё-всё-вс
                                         'Чтобы выйти из списка ожидания и попробовать сдать другую задачу, '
                                         'отправьте /leavewaitinglist, '
                                         'но помните, что тогда место в очереди будет утрачено') # сообщение участнику
-        with open('/home/pburub/mysite/waiting_list.json', 'w', encoding='utf-8') as f: # обновление информации в файле со списком ожидания
+        with open('waiting_list.json', 'w', encoding='utf-8') as f: # обновление информации в файле со списком ожидания
             json.dump(self.waiting_list, f, ensure_ascii=False, indent='\t')
         return False
 
@@ -236,7 +236,7 @@ class Olymp: # класс, в котором хранится всё-всё-вс
             if waiter['id'] == id_part:
                 self.waiting_list.remove(waiter) # удаляем его
                 self.participants[id_part]['isready'] = True # выставляем статус "готов"
-                with open('/home/pburub/mysite/waiting_list.json', 'w', encoding='utf-8') as f: # обновляем информацию в файле со списком ожидания
+                with open('waiting_list.json', 'w', encoding='utf-8') as f: # обновляем информацию в файле со списком ожидания
                     json.dump(self.waiting_list, f, ensure_ascii=False, indent='\t')
                 break
 

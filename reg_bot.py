@@ -1,7 +1,9 @@
-import flask
+import telebot.async_telebot
+# import flask
 import telebot
 from telebot import types
-import conf
+from telebot.types import Message
+from configparser import ConfigParser
 from moderators import moderators
 import pandas as pd
 import random
@@ -10,6 +12,14 @@ import sqlite3
 import numpy as np
 from create_db import create_database
 import os
+
+
+config = ConfigParser()
+config.read("config.ini")
+
+data = config["data"]
+TOKEN = data["token"]
+OWNER_ID = data["owner_id"]
 
 
 code_symbols = [chr(i) for i in range(48, 91)] + [chr(i) for i in range(97, 123)]
@@ -24,15 +34,15 @@ def generate_codes(n):
     return codes
 
 
-WEBHOOK_URL_BASE = "https://{}:{}".format(conf.WEBHOOK_HOST, conf.WEBHOOK_PORT)
-WEBHOOK_URL_PATH = "/{}/".format(conf.TOKEN)
+# WEBHOOK_URL_BASE = "https://{}:{}".format(conf.WEBHOOK_HOST, conf.WEBHOOK_PORT)
+# WEBHOOK_URL_PATH = "/{}/".format(conf.TOKEN)
 
-bot = telebot.TeleBot(conf.TOKEN, threaded=False)
-bot.remove_webhook()
-bot.set_webhook(url=WEBHOOK_URL_BASE + WEBHOOK_URL_PATH)
-app = flask.Flask(__name__)
+bot = telebot.TeleBot(TOKEN)
+# bot.remove_webhook()
+# bot.set_webhook(url=WEBHOOK_URL_BASE + WEBHOOK_URL_PATH)
+# app = flask.Flask(__name__)
 
-if not os.path.exists('/home/pburub/mysite/olymp.db'):
+if not os.path.exists('olymp.db'):
     create_database()
 tutors_table = pd.DataFrame(columns=['names', 'codes'])
 participants_table = pd.DataFrame(columns=['names', 'grades'])
@@ -41,60 +51,98 @@ part_data = {}
 done = []
 
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys() and message.text == '/start'
-else False)
-def welcome(message):
-    bot.send_message(message.chat.id, "/tutors - отправить таблицу с проверяющими (одна колонка с именами, озаглавлена "
-                                      "как names)\n/participants - отправить таблицу с участниками (две колонки: одна с "
-                                      "именами, озаглавлена names, втоая - классы, озаглавлена grades)")
+@bot.message_handler(
+    func=lambda message: (
+        True
+        if message.chat.id == OWNER_ID and message.text == "/start"
+        else False
+    )
+)
+def welcome(message: Message):
+    bot.send_message(
+        message.chat.id,
+        "/tutors - отправить таблицу с проверяющими (одна колонка с именами, озаглавлена "
+        "как names)\n/participants - отправить таблицу с участниками (две колонки: одна с "
+        "именами, озаглавлена names, вторая - классы, озаглавлена grades)",
+    )
 
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys() and message.text == '/tutors'
-else False)
-def tutors(message):
+@bot.message_handler(
+    func=lambda message: (
+        True
+        if message.chat.id == OWNER_ID and message.text == "/tutors"
+        else False
+    )
+)
+def tutors(message: Message):
     msg = bot.send_message(message.chat.id, "Пришлите .xlsx файл с проверяющими")
     bot.register_next_step_handler(msg, tutor_table)
 
 
-def tutor_table(file):
+def tutor_table(file: Message):
     global tutors_table
     try:
         file_info = bot.get_file(file.document.file_id)
         file_data = requests.get(
-            'https://api.telegram.org/file/bot{0}/{1}'.format(conf.TOKEN, file_info.file_path)).content
+            'https://api.telegram.org/file/bot{0}/{1}'.format(TOKEN, file_info.file_path)).content
         tutors_table = pd.read_excel(file_data)
         tutors_table["codes"] = generate_codes(tutors_table.shape[0])
         tutors_message = "Имя\tКод"
         for tutor in tutors_table.values:
             tutors_message += f"\n{tutor[0]}\t`{tutor[1]}`"
         bot.send_message(file.chat.id, tutors_message, parse_mode='MarkdownV2')
-    except:
-        bot.send_message(file.chat.id, 'Что-то пошло не так... Попробуйте ещё раз.')
+    except Exception as err:
+        bot.send_message(
+            file.chat.id, 
+            f'Что-то пошло не так... Попробуйте ещё раз.\n'
+            f'```\n'
+            f'{err}\n'
+            f'{err.__traceback__.tb_lineno}\n'
+            f'```'
+        )
 
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys() and
-                                                  message.text == '/participants' else False)
-def participants(message):
+@bot.message_handler(
+    func=lambda message: (
+        True
+        if message.chat.id == OWNER_ID and message.text == "/participants"
+        else False
+    )
+)
+def participants(message: Message):
     msg = bot.send_message(message.chat.id, "Пришлите .xlsx файл с участниками")
     bot.register_next_step_handler(msg, part_table)
 
 
-def part_table(file):
+def part_table(file: Message):
     global participants_table
     try:
         file_info = bot.get_file(file.document.file_id)
         file_data = requests.get(
-            'https://api.telegram.org/file/bot{0}/{1}'.format(conf.TOKEN, file_info.file_path)).content
+            'https://api.telegram.org/file/bot{0}/{1}'.format(TOKEN, file_info.file_path)).content
         participants_table = pd.read_excel(file_data)
         bot.send_message(file.chat.id, 'Принято!')
-    except:
-        bot.send_message(file.chat.id, 'Что-то пошло не так... Попробуйте ещё раз.')
+    except Exception as err:
+        bot.send_message(
+            file.chat.id, 
+            f'Что-то пошло не так... Попробуйте ещё раз.\n'
+            f'```\n'
+            f'{err}\n'
+            f'{err.__cause__}\n'
+            f'```'
+        )
 
 
-@bot.message_handler(func=lambda message: True if message.chat.id not in moderators.keys() and
-                                                  message.chat.id not in done and message.text in tutors_table[
-                                                      "codes"].values else False)
-def reg_tutor(message):
+@bot.message_handler(
+    func=lambda message: (
+        True
+        if #message.chat.id != OWNER_ID and
+        message.chat.id not in done
+        and message.text in tutors_table["codes"].values
+        else False
+    )
+)
+def reg_tutor(message: Message):
     global tutors_data
     tutors_data[message.chat.id] = {}
     idx = np.where(tutors_table['codes'].values == message.text)[0][0]
@@ -106,7 +154,7 @@ def reg_tutor(message):
     bot.register_next_step_handler(msg, tutor2db)
 
 
-def tutor2db(message):
+def tutor2db(message: Message):
     global tutors_data
     if message.text.lower() == 'да':
         msg = bot.send_message(message.chat.id, 'Пришлите ссылку на Вашу зум-конференцию',
@@ -117,7 +165,7 @@ def tutor2db(message):
                          reply_markup=types.ReplyKeyboardRemove())
 
 
-def get_link(message):
+def get_link(message: Message):
     global tutors_data
     tutors_data[message.chat.id]['link'] = message.text
     msg = bot.send_message(message.chat.id, 'Через запятую пришлите задачи, которые вы готовы принять,'
@@ -126,14 +174,14 @@ def get_link(message):
     bot.register_next_step_handler(msg, get_problems)
 
 
-def get_problems(message):
+def get_problems(message: Message):
     global tutors_data
     try:
         tutors_data[message.chat.id]['problems'] = list(map(int, message.text.split(',')))
     except:
         bot.send_message(message.chat.id, 'Неверный формат данных. Пожалуйста, введите код и пройдите регистрацию заново.')
         return
-    con = sqlite3.connect('/home/pburub/mysite/olymp.db')
+    con = sqlite3.connect('olymp.db')
     cur = con.cursor()
     cur.execute('INSERT into tutors VALUES (?,?,?)', (message.chat.id, tutors_data[message.chat.id]['name'],
                                                       tutors_data[message.chat.id]['link']))
@@ -145,15 +193,22 @@ def get_problems(message):
     bot.send_message(message.chat.id, 'Вы успешно зарегистрировались!')
 
 
-@bot.message_handler(func=lambda message: True if message.chat.id not in moderators.keys() and
-                                            message.chat.id not in done and message.text == '/lingolimp' else False)
-def reg_part(message):
+@bot.message_handler(
+    func=lambda message: (
+        True
+        if # message.chat.id != OWNER_ID and
+        message.chat.id not in done
+        and message.text == "/lingolimp"
+        else False
+    )
+)
+def reg_part(message: Message):
     msg = bot.send_message(message.chat.id, 'Приветствуем Вас, участник олимпиады! Пожалуста, пришлите Ваши имя и '
                             'фамилию, как указано в таблице (!), то есть, в том же порядке и с теми же символами.')
     bot.register_next_step_handler(msg, part2db)
 
 
-def part2db(message):
+def part2db(message: Message):
     global participants_table
     global part_data
     if message.text in participants_table['names'].values:
@@ -171,9 +226,9 @@ def part2db(message):
                                           'Пожалуйста, обратитесь к организаторам. По всем вопросам пишите Филе @leafbur или Лизе @saemari')
 
 
-def part_finish(message):
+def part_finish(message: Message):
     if message.text.lower() == 'да':
-        con = sqlite3.connect('/home/pburub/mysite/olymp.db')
+        con = sqlite3.connect('olymp.db')
         cur = con.cursor()
         cur.execute('INSERT into participants VALUES (?,?,?)', (message.chat.id, part_data[message.chat.id]['name'],
                                                                 part_data[message.chat.id]['grade']))
@@ -182,16 +237,23 @@ def part_finish(message):
         done.append(message.chat.id)
         bot.send_message(message.chat.id, 'Вы успешно зарегистрировались!', reply_markup=types.ReplyKeyboardRemove())
     else:
-        bot.send_message(message.chat.id, 'Что-то пошло не так. Пожалуйста, обратитесь к '
-                                          'организаторам. По всем вопросам пишите Филе @leafbur или Лизе @saemari', reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(
+            message.chat.id,
+            "Что-то пошло не так. Пожалуйста, обратитесь к "
+            "организаторам. По всем вопросам пишите Филе @leafbur или Лизе @saemari",
+            reply_markup=types.ReplyKeyboardRemove(),
+        )
 
+print("Запускаем бота...")
 
-@app.route(WEBHOOK_URL_PATH, methods=['POST'])
-def webhook():
-    if flask.request.headers.get('content-type') == 'application/json':
-        json_string = flask.request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return ''
-    else:
-        flask.abort(403)
+bot.infinity_polling()
+
+# @app.route(WEBHOOK_URL_PATH, methods=['POST'])
+# def webhook():
+#     if flask.request.headers.get('content-type') == 'application/json':
+#         json_string = flask.request.get_data().decode('utf-8')
+#         update = telebot.types.Update.de_json(json_string)
+#         bot.process_new_updates([update])
+#         return ''
+#     else:
+#         flask.abort(403)

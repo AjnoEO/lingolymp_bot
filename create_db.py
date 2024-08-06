@@ -1,7 +1,7 @@
 import sqlite3
 
 def create_database():
-    con = sqlite3.connect('/home/pburub/mysite/olymp.db')
+    con = sqlite3.connect('olymp.db')
     cur = con.cursor()
     try:
         cur.execute('''
