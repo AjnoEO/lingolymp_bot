@@ -3,8 +3,8 @@ import telebot.async_telebot
 import telebot
 from telebot import types
 from telebot.types import Message
-from configparser import ConfigParser
-from moderators import moderators
+from data import TOKEN, OWNER_ID
+# from moderators import moderators
 import pandas as pd
 import random
 import requests
@@ -12,14 +12,6 @@ import sqlite3
 import numpy as np
 from create_db import create_database
 import os
-
-
-config = ConfigParser()
-config.read("config.ini")
-
-data = config["data"]
-TOKEN = data["token"]
-OWNER_ID = data["owner_id"]
 
 
 code_symbols = [chr(i) for i in range(48, 91)] + [chr(i) for i in range(97, 123)]
