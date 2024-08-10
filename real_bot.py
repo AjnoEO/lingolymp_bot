@@ -1,22 +1,25 @@
-import flask
+# import flask
 import json
 import telebot
 import prettytable as pt
 import pandas as pd
 from telebot import types
+from telebot.types import Message
 from io import BytesIO
-import conf
+# import conf
+from data import TOKEN, OWNER_ID, OWNER_HANDLE
 from Olymper import Olymp
 from moderators import moderators
 from moderators import tasks
 
-WEBHOOK_URL_BASE = "https://{}:{}".format(conf.WEBHOOK_HOST, conf.WEBHOOK_PORT) # это для работы на сервере
-WEBHOOK_URL_PATH = "/{}/".format(conf.TOKEN)
+# WEBHOOK_URL_BASE = "https://{}:{}".format(conf.WEBHOOK_HOST, conf.WEBHOOK_PORT) # это для работы на сервере
+# WEBHOOK_URL_PATH = "/{}/".format(conf.TOKEN)
 
-bot = telebot.TeleBot(conf.TOKEN, threaded=False) # это тоже для работы на сервере
-bot.remove_webhook()
-bot.set_webhook(url=WEBHOOK_URL_BASE + WEBHOOK_URL_PATH)
-app = flask.Flask(__name__)
+
+bot = telebot.TeleBot(TOKEN) # это тоже для работы на сервере
+# bot.remove_webhook()
+# bot.set_webhook(url=WEBHOOK_URL_BASE + WEBHOOK_URL_PATH)
+# app = flask.Flask(__name__)
 
 ol = Olymp(bot) # подгружается класс Olimp из Olymper.py
 callmessage = {} # здесь хранятся сообщения бота, которые предлагают выбор задач (чтобы потом их можно было удалить)
@@ -25,32 +28,34 @@ adressed = []  # здесь формируется список тех, кому
 changer_part = None
 
 
-
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys()
-                                                  and message.text == '/start' else False) # команда /start, которая предлагает кнопки модератору
-def welcome(message):
-    bot.send_message(message.chat.id, f"Привет, {moderators[message.chat.id]}! =)\n"
+@bot.message_handler(
+    func=lambda message: (
+        True if message.chat.id == OWNER_ID and message.text == "/start" else False
+    )
+)  # команда /start, которая предлагает кнопки модератору
+def welcome(message: Message):
+    bot.send_message(message.chat.id, f"Привет, {OWNER_HANDLE}! =)\n"
                                       "Вот все твои возможности:", reply_markup=ol.get_moder_buttons()) # кнопки подгружаются из Olymper.py
 
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys() and not ol.active
+@bot.message_handler(func=lambda message: True if message.chat.id == OWNER_ID and not ol.active
                                                   and message.text == 'Начать олимпиаду' else False) # команда начала олимпиады
-def start_olymp(message):
+def start_olymp(message: Message):
     ol.activate() # активация олимпиады в Olymper.py
     bot.send_message(message.chat.id, 'Олимпиада началась!', reply_markup=types.ReplyKeyboardRemove())
     bot.send_message(message.chat.id, 'Удачи!', reply_markup=ol.get_moder_buttons())
 
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys() and ol.active
+@bot.message_handler(func=lambda message: True if message.chat.id == OWNER_ID and ol.active
                                                   and message.text == 'Завершить олимпиаду' else False) # команда завершения олимпиады
-def finish_olymp(message):
+def finish_olymp(message: Message):
     ol.deactivate() # деактивация олимпиады в Olymper.py
     bot.send_message(message.chat.id, 'Олимпиада завершилась!', reply_markup=types.ReplyKeyboardRemove())
 
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys()
+@bot.message_handler(func=lambda message: True if message.chat.id == OWNER_ID
                                                   and message.text == 'Список ожидания' else False) # предоставление списка ожидания модератору
-def send_waiting(message):
+def send_waiting(message: Message):
     table = pt.PrettyTable(['Имя', 'Класс', 'Задача', 'Время']) # создание класса красивой таблички, с помощью которого выводится информация
     table.align['Имя'] = 'l'
     table.align['Класс'] = 'r'
@@ -64,9 +69,9 @@ def send_waiting(message):
         bot.send_message(message.chat.id, 'Слишком много людей в списке...')
 
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys()
+@bot.message_handler(func=lambda message: True if message.chat.id == OWNER_ID
                                                   and message.text == 'Статусы проверяющих' else False) # предоставление статуса проверяющих модератору (аналогично)
-def send_tutors(message):
+def send_tutors(message: Message):
     table = pt.PrettyTable(['Имя', 'Статус'])
     table.align['Имя'] = 'l'
     table.align['Статус'] = 'r'
@@ -79,9 +84,9 @@ def send_tutors(message):
     bot.send_message(message.chat.id, f'<pre>{table}</pre>', parse_mode='HTML')
 
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys()
+@bot.message_handler(func=lambda message: True if message.chat.id == OWNER_ID
                                                   and message.text == 'Получить результаты' else False) # предоставление результатов модератору в Excel файле
-def results(message):
+def results(message: Message):
     if len(ol.participants) > 0:
         table = pd.DataFrame(data=ol.participants.values())
         table_new = pd.DataFrame()
@@ -89,10 +94,10 @@ def results(message):
         table_new['Класс'] = table['grade']
         table_new = pd.concat((table_new,
                                pd.DataFrame(table['marks'].tolist())), axis=1)
-        wt = pd.ExcelWriter('/home/pburub/mysite/results.xlsx')
+        wt = pd.ExcelWriter('results.xlsx')
         table_new.to_excel(wt, sheet_name='results', index=False)
         wt.close()
-        with open('/home/pburub/mysite/results.xlsx', 'rb') as f:
+        with open('results.xlsx', 'rb') as f:
             obj = BytesIO(f.read())
             obj.name = 'results.xlsx'
             bot.send_document(message.chat.id, document=obj)
@@ -100,34 +105,34 @@ def results(message):
         bot.send_message(message.chat.id, 'Пусто...')
 
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys()
+@bot.message_handler(func=lambda message: True if message.chat.id == OWNER_ID
                                                   and message.text == 'Написать всем' else False) # сообщение всем от модератора
-def sendall(message):
+def sendall(message: Message):
     global adressed
     adressed = [id_tutor for id_tutor in ol.tutors.keys()] + [id_part for id_part in ol.participants.keys()] # формирование списка адресатов
     bot.send_message(message.chat.id, 'Напишите, что нужно всем передать')
     bot.register_next_step_handler(message, send_message)
 
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys()
+@bot.message_handler(func=lambda message: True if message.chat.id == OWNER_ID
                                                   and message.text == 'только сдающим' else False) # сообщение участникам от модератора (аналогично)
-def sendpart(message):
+def sendpart(message: Message):
     global adressed
     adressed = [id_part for id_part in ol.participants.keys()]
     bot.send_message(message.chat.id, 'Напишите, что нужно передать сдающим')
     bot.register_next_step_handler(message, send_message)
 
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys()
+@bot.message_handler(func=lambda message: True if message.chat.id == OWNER_ID
                                                         and message.text == 'только проверяющим' else False) # сообщение проверяющим от модератора (аналогично)
-def sendtutors(message):
+def sendtutors(message: Message):
     global adressed
     adressed = [id_tutor for id_tutor in ol.tutors.keys()]
     bot.send_message(message.chat.id, 'Напишите, что нужно передать проверяющим')
     bot.register_next_step_handler(message, send_message)
 
 
-def send_message(message): # собственно отправка сообщения тем, кто в списке адресатов
+def send_message(message: Message): # собственно отправка сообщения тем, кто в списке адресатов
     global adressed
     for reciever in adressed:
         try:
@@ -136,13 +141,13 @@ def send_message(message): # собственно отправка сообще�
             pass
     bot.send_message(message.chat.id, 'Передали! ;)')
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys()
+@bot.message_handler(func=lambda message: True if message.chat.id == OWNER_ID
                                                   and message.text == 'Изменить информацию об участнике' else False) # Изменение информации об участнике
-def change_participant(message):
+def change_participant(message: Message):
     bot.send_message(message.chat.id, 'Напишите id участника')
     bot.register_next_step_handler(message, change_participant2)
 
-def change_participant2(message):
+def change_participant2(message: Message):
     global changer_part
     if message.text.isnumeric() and int(message.text) in ol.participants:
         changer_part = int(message.text)
@@ -155,7 +160,7 @@ def change_participant2(message):
     else:
         bot.send_message(message.chat.id, 'Что-то пошло не так(')
 
-def change_participant3(message):
+def change_participant3(message: Message):
     global changer_part
     if message.text == 'Имя':
         bot.send_message(message.chat.id, 'Пришли новое имя')
@@ -169,13 +174,13 @@ def change_participant3(message):
     else:
         bot.send_message(message.chat.id, 'Что-то пошло не так(')
 
-def change_participant_name(message):
+def change_participant_name(message: Message):
     global changer_part
     ol.participants[changer_part]['name'] = message.text
     bot.send_message(message.chat.id, 'Имя успешно изменено')
     ol.save_part()
 
-def change_participant_grade(message):
+def change_participant_grade(message: Message):
     global changer_part
     if message.text.isnumeric():
         grade = int(message.text)
@@ -193,7 +198,7 @@ def change_participant_grade(message):
     else:
         bot.send_message(message.chat.id, 'Что-то пошло не так(')
 
-def change_participant_task(message):
+def change_participant_task(message: Message):
     global changer_part
     if message.text.isnumeric():
         changer_part = [changer_part, int(message.text)]
@@ -202,7 +207,7 @@ def change_participant_task(message):
     else:
         bot.send_message(message.chat.id, 'Что-то пошло не так(')
 
-def change_participant_task2(message):
+def change_participant_task2(message: Message):
     global changer_part
     if message.text.strip('-').isnumeric():
         ol.participants[changer_part[0]]['marks'][changer_part[1]] = int(message.text)
@@ -211,13 +216,13 @@ def change_participant_task2(message):
     else:
         bot.send_message(message.chat.id, 'Что-то пошло не так(')
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys()
+@bot.message_handler(func=lambda message: True if message.chat.id == OWNER_ID
                                                   and message.text == 'Добавить участника' else False) # Добавление участника
-def add_participant(message):
+def add_participant(message: Message):
     bot.send_message(message.chat.id, 'Пришлите через запятую id, имя и класс')
     bot.register_next_step_handler(message, add_participant2)
 
-def add_participant2(message):
+def add_participant2(message: Message):
     info = message.text.split(',')
     if len(info) == 3:
         info[0] = info[0].strip(' ')
@@ -239,13 +244,13 @@ def add_participant2(message):
     else:
         bot.send_message(message.chat.id, 'Что-то пошло не так(')
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys()
+@bot.message_handler(func=lambda message: True if message.chat.id == OWNER_ID
                                                   and message.text == 'Изменить информацию о проверяющем' else False) # Изменение информации о проверяющем
-def change_tutor(message):
+def change_tutor(message: Message):
     bot.send_message(message.chat.id, 'Напишите id проверяющего')
     bot.register_next_step_handler(message, change_tutor2)
 
-def change_tutor2(message):
+def change_tutor2(message: Message):
     global changer_part
     if message.text.isnumeric() and int(message.text) in ol.tutors:
         changer_part = int(message.text)
@@ -258,7 +263,7 @@ def change_tutor2(message):
     else:
         bot.send_message(message.chat.id, 'Что-то пошло не так(')
 
-def change_tutor3(message):
+def change_tutor3(message: Message):
     global changer_part
     if message.text == 'Имя':
         bot.send_message(message.chat.id, 'Пришли новое имя')
@@ -272,19 +277,19 @@ def change_tutor3(message):
     else:
         bot.send_message(message.chat.id, 'Что-то пошло не так(')
 
-def change_tutor_name(message):
+def change_tutor_name(message: Message):
     global changer_part
     ol.tutors[changer_part]['name'] = message.text
     bot.send_message(message.chat.id, 'Имя успешно изменено')
     ol.save_tutors()
 
-def change_tutor_link(message):
+def change_tutor_link(message: Message):
     global changer_part
     ol.tutors[changer_part]['link'] = message.text
     bot.send_message(message.chat.id, 'Ссылка успешно изменена')
     ol.save_tutors()
 
-def change_tutor_tasks(message):
+def change_tutor_tasks(message: Message):
     global changer_part
     if message.text.replace(' ', '').replace(',', '').isnumeric():
         tutor_tasks = list(map(int, message.text.replace(' ', '').split(',')))
@@ -292,13 +297,13 @@ def change_tutor_tasks(message):
         bot.send_message(message.chat.id, 'Список задач успешно изменён')
         ol.save_tutors()
 
-@bot.message_handler(func=lambda message: True if message.chat.id in moderators.keys()
+@bot.message_handler(func=lambda message: True if message.chat.id == OWNER_ID
                                                   and message.text == 'Добавить проверяющего' else False) # Добавление проверяющего
-def add_tutor(message):
+def add_tutor(message: Message):
     bot.send_message(message.chat.id, 'Пришлите через запятую id и имя')
     bot.register_next_step_handler(message, add_tutor2)
 
-def add_tutor2(message):
+def add_tutor2(message: Message):
     global changer_part
     info = message.text.replace(' ', '').split(',')
     if len(info) == 2 and info[0].isnumeric():
@@ -308,13 +313,13 @@ def add_tutor2(message):
     else:
         bot.send_message(message.chat.id, 'Что-то пошло не так(')
 
-def add_tutor3(message):
+def add_tutor3(message: Message):
     global changer_part
     changer_part.append(message.text)
     bot.send_message(message.chat.id, 'Пришлите через запятую задачи')
     bot.register_next_step_handler(message, add_tutor4)
 
-def add_tutor4(message):
+def add_tutor4(message: Message):
     global changer_part
     if message.text.replace(' ', '').replace(',', '').isnumeric():
         tutor_tasks = list(map(int, message.text.replace(' ', '').split(',')))
@@ -327,7 +332,7 @@ def add_tutor4(message):
 
 @bot.message_handler(func=lambda message: True if message.chat.id in ol.participants.keys() and ol.active and
                                 ol.participants[message.chat.id]['isready'] == True and message.text == '/request' else False) # запрос от участников
-def interface(message):
+def interface(message: Message):
     keyboard = types.InlineKeyboardMarkup(row_width=3) # создание клавиатуры
     dct_items = ol.participants[message.chat.id]['marks'].items()
     for number, ev in sorted(dct_items, key=lambda x: x[0]): # смотрим, на доступные им задачи и оценки
@@ -359,7 +364,7 @@ def process(call):
                         reply_markup=keyboard) # уточняем, ту ли задачу имел в виду участник (с кнопками да/нет)
     bot.register_next_step_handler(message, send_request)
 
-def send_request(message): # обработка ответа да/нет
+def send_request(message: Message): # обработка ответа да/нет
     number = callnumber[message.chat.id] # вспоминаем номер задачи
     if message.text.lower() == 'да': # если да, то отправляем запрос
         button_num = ol.conv_num(number, ol.participants[message.chat.id]['grade'])
@@ -374,7 +379,7 @@ def send_request(message): # обработка ответа да/нет
 
 @bot.message_handler(func=lambda message: True if message.chat.id in ol.participants.keys() and ol.active and
                                 ol.participants[message.chat.id]['isready'] == 'SEARCH' and message.text == '/leavewaitinglist' else False) # запрос покинуть список ожидания от учатника
-def leavewo(message):
+def leavewo(message: Message):
     ol.leave_waiting_list(message.chat.id) # выполняем действие в Olymper.py
     bot.send_message(message.chat.id, 'Когда будете готовы сдать какую-либо задачу, напишите /request')
 
@@ -382,9 +387,9 @@ def leavewo(message):
                                 and ol.tutors[message.chat.id]['isready'] == False
                                 and ol.tutors[message.chat.id]['last']['id'] == None
                                 and message.text == '/free' else False) # команда выставления статуса "свободен" проверяющим
-def free_tutor(message):
+def free_tutor(message: Message):
     ol.tutors[message.chat.id]['isready'] = True # меняю статус проверяющего
-    with open('/home/pburub/mysite/tutors.json', 'w', encoding='utf-8') as f: # сохраняю в файл изменённое состояние
+    with open('tutors.json', 'w', encoding='utf-8') as f: # сохраняю в файл изменённое состояние
         json.dump(ol.tutors, f, ensure_ascii=False, indent='\t')
     bot.send_message(message.chat.id, 'Ожидайте следующего участника. Чтобы изменить статус на '
                                         '"Занят", отправьте /unfree')
@@ -395,19 +400,23 @@ def free_tutor(message):
                                 and ol.tutors[message.chat.id]['isready'] == True
                                 and ol.tutors[message.chat.id]['last']['id'] == None
                                 and message.text == '/unfree' else False) # команда (самостоятельного) выставления статуса "занят" проверяющим
-def unfree_tutor(message):
+def unfree_tutor(message: Message):
     ol.tutors[message.chat.id]['isready'] = False # меняю статус проверяющего
-    with open('/home/pburub/mysite/tutors.json', 'w', encoding='utf-8') as f: # сохраняю в файл изменённое состояние
+    with open('tutors.json', 'w', encoding='utf-8') as f: # сохраняю в файл изменённое состояние
         json.dump(ol.tutors, f, ensure_ascii=False, indent='\t')
     bot.send_message(message.chat.id, 'Чтобы продолжить оценивать участников, напишите /free')
     return
 
-@app.route(WEBHOOK_URL_PATH, methods=['POST']) # это тоже для работы на сервере
-def webhook():
-    if flask.request.headers.get('content-type') == 'application/json':
-        json_string = flask.request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return ''
-    else:
-        flask.abort(403)
+print("Запускаем бота...")
+
+bot.infinity_polling()
+
+# @app.route(WEBHOOK_URL_PATH, methods=['POST']) # это тоже для работы на сервере
+# def webhook():
+#     if flask.request.headers.get('content-type') == 'application/json':
+#         json_string = flask.request.get_data().decode('utf-8')
+#         update = telebot.types.Update.de_json(json_string)
+#         bot.process_new_updates([update])
+#         return ''
+#     else:
+#         flask.abort(403)

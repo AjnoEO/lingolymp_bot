@@ -1,5 +1,11 @@
 # База данных
 olymp.db
+res.json
+tutors.json
+waiting_list.json
+
+# Сводка результатов
+results.xlsx
 
 # Конфиденциальная инфа
 config.ini
